@@ -1,3 +1,4 @@
+
 #include <M5Unified.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
@@ -14,32 +15,84 @@
 // CONFIGURATION
 // =====================================================
 
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
+#define WIFI_SSID "YOUR_WIFI"
+#define WIFI_PASSWORD "YOUR_PASSWORD"
 
 const char* ICAL_URLS[] = {
-  "..family calendar..",
-  "..work calendar.."
+  "http://YOUR_FIRST_CALENDAR.ics",
+  "http://YOUR_SECOND_CALENDAR.ics",
+  "http://YOUR_THIRD_CALENDAR.ics"
 };
 
 constexpr size_t ICAL_COUNT =
   sizeof(ICAL_URLS) / sizeof(ICAL_URLS[0]);
 
-#error "BUILD STOP: Configure WiFi and all three iCal URLs!"
+// =====================================================
+// TV SCHEDULE SUBSCRIPTIONS
+// =====================================================
+//
+// An entry is included when ANY subscription matches.
+//
+// CHANNEL: Exact match, case-insensitive.
+// SPORT:   Exact match, case-insensitive.
+// NAME:    Contains text, case-insensitive.
+//
+// Empty arrays match nothing.
+//
+// Example channel values:
+//   disney
+//   synsport
+//   synsportviaplay
+//   synsportisland
+//
+// Add or remove entries as desired.
+// =====================================================
+
+const char* scheduleChannelSubscriptions[] = {
+  // "disney",
+  // "synsportisland"
+};
+
+const char* scheduleSportSubscriptions[] = {
+  "Bónus deild kvenna",
+  "Bónus deild karla",
+  "Meistaradeild karla",
+  "LaLiga",
+  "Premier League"
+};
+
+const char* scheduleNameSubscriptions[] = {
+  "Liverpool"
+};
+
+constexpr size_t CHANNEL_SUBSCRIPTION_COUNT =
+  sizeof(scheduleChannelSubscriptions) /
+  sizeof(scheduleChannelSubscriptions[0]);
+
+constexpr size_t SPORT_SUBSCRIPTION_COUNT =
+  sizeof(scheduleSportSubscriptions) /
+  sizeof(scheduleSportSubscriptions[0]);
+
+constexpr size_t NAME_SUBSCRIPTION_COUNT =
+  sizeof(scheduleNameSubscriptions) /
+  sizeof(scheduleNameSubscriptions[0]);
+
+// Remove after configuring WiFi and iCal URLs.
+#error "BUILD STOP: Configure WiFi and iCal URLs!"
 
 const char* SPORTS_URL =
   "https://www.framundanibeinni.is/api/schedule";
 
 const char* TIMEZONE = "GMT0";
 
-// At 21:00, automatically display tomorrow.
+// After 21:00, display tomorrow by default.
 constexpr int NEXT_DAY_HOUR = 21;
 constexpr int NEXT_DAY_MINUTE = 0;
 
 // Sleep after two minutes of inactivity.
 constexpr unsigned long AUTO_SLEEP_MS = 120000;
 
-// Wake after four hours.
+// Wake automatically after four hours.
 constexpr uint64_t SLEEP_SECONDS =
   4ULL * 60ULL * 60ULL;
 
@@ -132,7 +185,7 @@ int firstTouchX = 0;
 int firstTouchY = 0;
 
 // =====================================================
-// TEXT
+// TEXT HELPERS
 // =====================================================
 
 String ascii(String s) {
@@ -161,6 +214,122 @@ String ascii(String s) {
   }
 
   return s;
+}
+
+String normalized(String value) {
+  value = ascii(value);
+  value.trim();
+  value.toLowerCase();
+  return value;
+}
+
+bool equalsIgnoreCaseAscii(
+  const String& value,
+  const char* subscription
+) {
+  if (subscription == nullptr) {
+    return false;
+  }
+
+  return normalized(value) ==
+         normalized(String(subscription));
+}
+
+bool containsIgnoreCaseAscii(
+  const String& value,
+  const char* subscription
+) {
+  if (subscription == nullptr) {
+    return false;
+  }
+
+  String needle = normalized(String(subscription));
+
+  if (needle.isEmpty()) {
+    return false;
+  }
+
+  String haystack = normalized(value);
+
+  return haystack.indexOf(needle) >= 0;
+}
+
+// =====================================================
+// SUBSCRIPTION MATCHING
+// =====================================================
+
+bool matchesChannelSubscription(
+  const String& channel
+) {
+  for (
+    size_t i = 0;
+    i < CHANNEL_SUBSCRIPTION_COUNT;
+    i++
+  ) {
+    if (
+      equalsIgnoreCaseAscii(
+        channel,
+        scheduleChannelSubscriptions[i]
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool matchesSportSubscription(
+  const String& sport
+) {
+  for (
+    size_t i = 0;
+    i < SPORT_SUBSCRIPTION_COUNT;
+    i++
+  ) {
+    if (
+      equalsIgnoreCaseAscii(
+        sport,
+        scheduleSportSubscriptions[i]
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool matchesNameSubscription(
+  const String& name
+) {
+  for (
+    size_t i = 0;
+    i < NAME_SUBSCRIPTION_COUNT;
+    i++
+  ) {
+    if (
+      containsIgnoreCaseAscii(
+        name,
+        scheduleNameSubscriptions[i]
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool matchesScheduleSubscription(
+  const String& channel,
+  const String& sport,
+  const String& name
+) {
+  return
+    matchesChannelSubscription(channel) ||
+    matchesSportSubscription(sport) ||
+    matchesNameSubscription(name);
 }
 
 // =====================================================
@@ -215,7 +384,13 @@ String dateKey(time_t timestamp) {
   localtime_r(&timestamp, &t);
 
   char buffer[16];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%d", &t);
+
+  strftime(
+    buffer,
+    sizeof(buffer),
+    "%Y-%m-%d",
+    &t
+  );
 
   return String(buffer);
 }
@@ -241,7 +416,13 @@ String hhmm(time_t timestamp) {
   localtime_r(&timestamp, &t);
 
   char buffer[8];
-  strftime(buffer, sizeof(buffer), "%H:%M", &t);
+
+  strftime(
+    buffer,
+    sizeof(buffer),
+    "%H:%M",
+    &t
+  );
 
   return String(buffer);
 }
@@ -268,7 +449,7 @@ time_t getDefaultDisplayDay() {
 }
 
 // =====================================================
-// WIFI / TIME
+// WIFI / NTP
 // =====================================================
 
 bool ensureWiFi() {
@@ -294,6 +475,7 @@ bool ensureWiFi() {
     return true;
   }
 
+  Serial.println("WiFi unavailable");
   return false;
 }
 
@@ -309,7 +491,9 @@ bool syncClock() {
   ntpReceived = false;
   clockReady = false;
 
-  sntp_set_time_sync_notification_cb(ntpCallback);
+  sntp_set_time_sync_notification_cb(
+    ntpCallback
+  );
 
   configTzTime(
     TIMEZONE,
@@ -329,6 +513,8 @@ bool syncClock() {
         plausible(t)
       ) {
         clockReady = true;
+
+        Serial.println("NTP synchronized");
         return true;
       }
     }
@@ -336,6 +522,7 @@ bool syncClock() {
     delay(200);
   }
 
+  Serial.println("NTP synchronization failed");
   return false;
 }
 
@@ -350,10 +537,11 @@ bool downloadText(
 ) {
   output = "";
 
-  for (int attempt = 1;
-       attempt <= HTTP_RETRIES;
-       attempt++) {
-
+  for (
+    int attempt = 1;
+    attempt <= HTTP_RETRIES;
+    attempt++
+  ) {
     if (!ensureWiFi()) {
       error = "WiFi unavailable";
       delay(1000);
@@ -369,14 +557,14 @@ bool downloadText(
       String(url).startsWith("https://");
 
     HTTPClient http;
+
     http.setTimeout(30000);
     http.setReuse(false);
 
-    // Redirects between HTTP and HTTPS may require
-    // an explicit reconnect with a different client.
     http.setFollowRedirects(
       HTTPC_STRICT_FOLLOW_REDIRECTS
     );
+
     http.setRedirectLimit(5);
 
     bool started = https
@@ -680,7 +868,7 @@ bool parseCalendar(
 }
 
 // =====================================================
-// FETCH AND MERGE ALL THREE CALENDARS
+// FETCH AND MERGE ALL CALENDARS
 // =====================================================
 
 bool fetchCalendar() {
@@ -712,8 +900,10 @@ bool fetchCalendar() {
         error.c_str()
       );
 
-      errors += "Calendar " +
-        String(i + 1) + " failed; ";
+      errors +=
+        "Calendar " +
+        String(i + 1) +
+        " failed; ";
 
       continue;
     }
@@ -724,13 +914,10 @@ bool fetchCalendar() {
       !body.startsWith("BEGIN:VCALENDAR") ||
       body.indexOf("END:VCALENDAR") < 0
     ) {
-      Serial.printf(
-        "Calendar %u: incomplete iCal\n",
-        (unsigned)(i + 1)
-      );
-
-      errors += "Calendar " +
-        String(i + 1) + " invalid; ";
+      errors +=
+        "Calendar " +
+        String(i + 1) +
+        " invalid; ";
 
       continue;
     }
@@ -747,12 +934,9 @@ bool fetchCalendar() {
 
     successfulFeeds++;
 
-    // Release the downloaded feed before
-    // fetching the next one.
     body = "";
   }
 
-  // Merge all events chronologically.
   std::sort(
     merged.begin(),
     merged.end(),
@@ -766,8 +950,6 @@ bool fetchCalendar() {
     }
   );
 
-  // Preserve events from successful feeds even
-  // when one of the three calendars fails.
   if (successfulFeeds > 0) {
     calendarEvents = std::move(merged);
     calendarLoaded = true;
@@ -780,7 +962,7 @@ bool fetchCalendar() {
       (unsigned)ICAL_COUNT
     );
 
-    return successfulFeeds == (int)ICAL_COUNT;
+    return true;
   }
 
   calendarLoaded = false;
@@ -790,15 +972,8 @@ bool fetchCalendar() {
 }
 
 // =====================================================
-// SPORTS
+// SPORTS CHANNEL LABELS
 // =====================================================
-
-bool allowedChannel(String channel) {
-  channel.toLowerCase();
-
-  return channel == "disney" ||
-         channel.startsWith("synsport");
-}
 
 String channelLabel(String channel) {
   channel.toLowerCase();
@@ -821,6 +996,10 @@ String channelLabel(String channel) {
 
   return ascii(channel);
 }
+
+// =====================================================
+// SPORTS FETCH WITH SUBSCRIPTION FILTERING
+// =====================================================
 
 bool fetchSports() {
   String body;
@@ -882,30 +1061,50 @@ bool fetchSports() {
   JsonArray events =
     schedule[key].as<JsonArray>();
 
+  int totalEntries = 0;
+  int matchedEntries = 0;
+
   if (!events.isNull()) {
     for (JsonObject item : events) {
+      totalEntries++;
+
       String channel =
         item["channel"] | "";
 
-      if (!allowedChannel(channel)) {
+      String sport =
+        item["sport"] | "";
+
+      String name =
+        item["name"] | "";
+
+      // Include the event if it matches ANY
+      // of the three subscription lists.
+      if (
+        !matchesScheduleSubscription(
+          channel,
+          sport,
+          name
+        )
+      ) {
         continue;
       }
 
+      matchedEntries++;
+
       TvEvent event;
 
-      String time = item["time"] | "";
+      String eventTime =
+        item["time"] | "";
 
       event.time =
-        time.length() >= 5
-          ? time.substring(0, 5)
-          : time;
+        eventTime.length() >= 5
+          ? eventTime.substring(0, 5)
+          : eventTime;
 
-      event.name = ascii(
-        String(item["name"] | "")
-      );
+      event.name = ascii(name);
 
       event.details =
-        ascii(String(item["sport"] | "")) +
+        ascii(sport) +
         " | " +
         channelLabel(channel);
 
@@ -929,11 +1128,17 @@ bool fetchSports() {
   );
 
   tvEvents = std::move(parsed);
+
   tvLoaded = true;
   tvError = "";
 
   Serial.printf(
-    "TV events: %u\n",
+    "TV schedule %s: %d entries, "
+    "%d subscription matches, "
+    "%u displayed\n",
+    key.c_str(),
+    totalEntries,
+    matchedEntries,
     (unsigned)tvEvents.size()
   );
 
@@ -1009,8 +1214,6 @@ void drawButton(
 // =====================================================
 
 void drawDateHeader() {
-  // Small date above the large weekday,
-  // visually similar to a superscript label.
   textAt(
     LEFT + 4,
     12,
@@ -1199,7 +1402,9 @@ void drawTvSection() {
       &fonts::FreeSans12pt7b
     );
   }
-  else if (tvEvents.size() > (size_t)shown) {
+  else if (
+    tvEvents.size() > (size_t)shown
+  ) {
     textAt(
       LEFT,
       TV_BOTTOM - 22,
@@ -1346,9 +1551,7 @@ void checkDefaultDay() {
 // =====================================================
 
 void goToSleep() {
-  Serial.println(
-    "Deep sleep for 4 hours"
-  );
+  Serial.println("Deep sleep for 4 hours");
 
   esp_sleep_enable_timer_wakeup(
     SLEEP_SECONDS * 1000000ULL
@@ -1432,7 +1635,7 @@ void loop() {
     int dx = lastTouchX - firstTouchX;
     int dy = lastTouchY - firstTouchY;
 
-    // Taps only; no swipe navigation.
+    // Tap navigation only.
     if (
       abs(dx) < 25 &&
       abs(dy) < 25 &&
@@ -1462,7 +1665,7 @@ void loop() {
 
   wasTouching = touching;
 
-  // Check date changes and failed downloads.
+  // Periodic checks.
   if (millis() - lastCheck >= CHECK_MS) {
     lastCheck = millis();
 
@@ -1488,8 +1691,7 @@ void loop() {
     }
   }
 
-  // Preserve the last e-ink image and wake
-  // automatically after four hours.
+  // Automatic sleep, timer wake after four hours.
   if (
     millis() - lastInteraction >= AUTO_SLEEP_MS
   ) {
